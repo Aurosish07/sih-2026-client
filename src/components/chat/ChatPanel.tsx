@@ -14,15 +14,12 @@ const SUGGESTIONS = [
 ];
 
 export default function ChatPanel() {
-  const { messages, isStreaming, activeToolCalls, sendMessage, stopStreaming, clearMessages } =
-    useChatStore();
+  const { messages, isStreaming, activeToolCalls, sendMessage, stopStreaming, clearMessages } = useChatStore();
   const [input, setInput] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, activeToolCalls]);
+  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, activeToolCalls]);
 
   const handleSend = () => {
     const text = input.trim();
@@ -33,56 +30,51 @@ export default function ChatPanel() {
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      handleSend();
-    }
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); }
   };
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full" style={{ background: "#f8f9ff" }}>
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 bg-white/70">
-        <div>
-          <h2 className="text-sm font-semibold text-slate-900">CycloneGPT</h2>
-          <p className="text-[10px] text-slate-500">
-            AI cyclone intelligence agent
-          </p>
+      <div className="flex items-center justify-between px-5 py-3 border-b shrink-0" style={{ background: "#ffffff", borderColor: "#e4e8f0", boxShadow: "0 2px 8px rgba(99,102,241,0.06)" }}>
+        <div className="flex items-center gap-3">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl text-white shadow" style={{ background: "linear-gradient(135deg,#6366f1,#8b5cf6)" }}>
+            🌀
+          </div>
+          <div>
+            <h2 className="text-sm font-bold" style={{ color: "#1a2035" }}>CycloneGPT</h2>
+            <p className="text-[10px] font-medium" style={{ color: "#8b95b0" }}>AI cyclone intelligence agent</p>
+          </div>
+          <span className="flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[10px] font-semibold" style={{ background: "#ecfdf5", borderColor: "#6ee7b7", color: "#059669" }}>
+            <span className="h-1.5 w-1.5 rounded-full pulse-live" style={{ background: "#10b981" }} />
+            Online
+          </span>
         </div>
-        <div className="flex gap-2">
-          <button
-            onClick={clearMessages}
-            className="text-[10px] px-2 py-1 rounded bg-slate-100 text-slate-500 hover:text-slate-900 hover:bg-slate-200 transition-colors border border-slate-200"
-          >
-            Clear
-          </button>
-        </div>
+        <button onClick={clearMessages}
+          className="rounded-xl border px-3 py-1.5 text-xs font-medium transition hover:opacity-80"
+          style={{ background: "#f4f6fb", borderColor: "#e4e8f0", color: "#5a6380" }}>
+          Clear chat
+        </button>
       </div>
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto px-4 py-4">
         {messages.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full space-y-6">
+          <div className="flex flex-col items-center justify-center h-full space-y-6 slide-in-up">
             <div className="text-center">
-              <div className="text-2xl mb-2">🌀</div>
-              <h3 className="text-lg font-semibold text-slate-900 mb-1">
-                CycloneGPT
-              </h3>
-              <p className="text-sm text-slate-500 max-w-xs">
-                Ask me anything about North Indian Ocean cyclones — tracks,
-                intensity, satellite analysis, and predictions.
+              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl text-3xl shadow-xl" style={{ background: "linear-gradient(135deg,#6366f1,#8b5cf6,#ec4899)" }}>
+                🌀
+              </div>
+              <h3 className="text-xl font-bold mb-2" style={{ color: "#1a2035" }}>CycloneGPT</h3>
+              <p className="text-sm max-w-xs" style={{ color: "#5a6380" }}>
+                Ask me anything about North Indian Ocean cyclones — tracks, intensity, satellite analysis, and AI predictions.
               </p>
             </div>
             <div className="flex flex-wrap gap-2 justify-center max-w-md">
               {SUGGESTIONS.map((s) => (
-                <button
-                  key={s}
-                  onClick={() => {
-                    setInput(s);
-                    inputRef.current?.focus();
-                  }}
-                  className="text-[11px] px-3 py-1.5 rounded-full bg-white border border-slate-300 text-slate-600 hover:text-slate-900 hover:border-slate-400 transition-colors shadow-sm"
-                >
+                <button key={s} onClick={() => { setInput(s); inputRef.current?.focus(); }}
+                  className="rounded-full border px-3 py-1.5 text-xs font-medium transition-all hover:scale-105"
+                  style={{ background: "#ffffff", borderColor: "#c7d2fe", color: "#6366f1", boxShadow: "0 2px 8px rgba(99,102,241,0.1)" }}>
                   {s}
                 </button>
               ))}
@@ -91,42 +83,37 @@ export default function ChatPanel() {
         ) : (
           <>
             <ToolCallDisplay toolCalls={activeToolCalls} />
-            {messages.map((msg) => (
-              <MessageBubble key={msg.id} message={msg} />
-            ))}
+            {messages.map((msg) => <MessageBubble key={msg.id} message={msg} />)}
           </>
         )}
         <div ref={bottomRef} />
       </div>
 
       {/* Input */}
-      <div className="px-4 py-3 border-t border-slate-200 bg-white/70">
+      <div className="px-4 py-3 border-t shrink-0" style={{ background: "#ffffff", borderColor: "#e4e8f0" }}>
         <div className="flex gap-2 items-end">
-          <textarea
-            ref={inputRef}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
+          <textarea ref={inputRef} value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={handleKeyDown}
             placeholder="Ask about a cyclone..."
             rows={1}
-            className="flex-1 bg-white border border-slate-300 rounded-xl px-4 py-2.5 text-sm text-slate-900 placeholder-slate-400 resize-none focus:outline-none focus:border-orange-500/50 focus:ring-1 focus:ring-orange-500/20 shadow-sm"
+            className="flex-1 rounded-2xl border px-4 py-3 text-sm resize-none outline-none transition-all"
+            style={{ background: "#f4f6fb", borderColor: input ? "#c7d2fe" : "#e4e8f0", color: "#1a2035", boxShadow: input ? "0 0 0 3px rgba(99,102,241,0.12)" : "none" }}
           />
           {isStreaming ? (
-            <button
-              onClick={stopStreaming}
-              className="px-4 py-2.5 rounded-xl bg-red-600 text-white text-sm font-medium hover:bg-red-500 transition-colors"
-            >
-              Stop
+            <button onClick={stopStreaming}
+              className="rounded-2xl px-4 py-3 text-sm font-semibold text-white transition hover:opacity-80"
+              style={{ background: "linear-gradient(135deg,#ef4444,#dc2626)" }}>
+              ⏹ Stop
             </button>
           ) : (
-            <button
-              onClick={handleSend}
-              disabled={!input.trim()}
-              className="px-4 py-2.5 rounded-xl bg-orange-600 text-white text-sm font-medium hover:bg-orange-500 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-            >
-              Send
+            <button onClick={handleSend} disabled={!input.trim()}
+              className="rounded-2xl px-4 py-3 text-sm font-semibold text-white transition hover:opacity-80 disabled:opacity-40 disabled:cursor-not-allowed"
+              style={{ background: "linear-gradient(135deg,#6366f1,#8b5cf6)" }}>
+              Send ↑
             </button>
           )}
+        </div>
+        <div className="mt-2 text-[10px] text-center" style={{ color: "#c4c9dc" }}>
+          Powered by StormSense AI · North Indian Ocean Basin
         </div>
       </div>
     </div>

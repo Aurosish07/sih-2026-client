@@ -19,32 +19,51 @@ import {
 import { getCategoryColor, windToCategory } from "@/lib/types";
 import LeafletFallbackMap from "./LeafletFallbackMap";
 
+export interface ConeCircle {
+  timestamp: string;
+  lat: number;
+  lon: number;
+  radiusKm: number;
+}
+
 interface CycloneMapProps {
   storm: Storm | null;
   track: TrackPoint[];
   forecastTrack?: TrackPoint[];
+  cone?: ConeCircle[];
   storms?: Storm[];
   onSelectStorm?: (stormId: string) => void;
   className?: string;
   hideOverlays?: boolean;
+  basemap?: BasemapKind;
 }
 
 export default function CycloneMap({
   storm,
   track,
   forecastTrack = [],
+  cone = [],
   storms = [],
   onSelectStorm,
   className,
   hideOverlays = false,
+  basemap = "satellite",
 }: CycloneMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
+  const basemapRef = useRef<BasemapKind>(basemap);
+  useEffect(() => {
+    basemapRef.current = basemap;
+  }, [basemap]);
   const onSelectRef = useRef<((id: string) => void) | undefined>(undefined);
   const stormsRef = useRef<Storm[]>(storms);
   useEffect(() => {
     stormsRef.current = storms;
   }, [storms]);
+  const coneRef = useRef<ConeCircle[]>(cone);
+  useEffect(() => {
+    coneRef.current = cone;
+  }, [cone]);
   useEffect(() => {
     onSelectRef.current = onSelectStorm;
   }, [onSelectStorm]);
@@ -82,7 +101,7 @@ export default function CycloneMap({
     try {
       map = new MapLibreMap({
         container: containerRef.current,
-        style: buildStyle(),
+        style: buildStyle(basemapRef.current),
         center: latestTrackPoint ? [latestTrackPoint.lon, latestTrackPoint.lat] : [80, 15],
         zoom: latestTrackPoint ? 4.8 : 3.7,
         attributionControl: false,
@@ -190,6 +209,33 @@ export default function CycloneMap({
         },
       });
 
+      map.addSource("cone", {
+        type: "geojson",
+        data: emptyFeatureCollection(),
+      });
+
+      map.addLayer({
+        id: "cone-fill",
+        type: "fill",
+        source: "cone",
+        paint: {
+          "fill-color": "#38bdf8",
+          "fill-opacity": 0.16,
+        },
+      });
+
+      map.addLayer({
+        id: "cone-line",
+        type: "line",
+        source: "cone",
+        paint: {
+          "line-color": "#0ea5e9",
+          "line-width": 1.5,
+          "line-dasharray": [2, 2],
+          "line-opacity": 0.8,
+        },
+      });
+
       map.addSource("storms", {
         type: "geojson",
         data: emptyFeatureCollection(),
@@ -232,7 +278,7 @@ export default function CycloneMap({
         map.getCanvas().style.cursor = "";
       });
 
-      updateMapSources(map, track, forecastTrack, stormsRef.current);
+      updateMapSources(map, track, forecastTrack, coneRef.current, stormsRef.current);
     });
 
     mapRef.current = map;
@@ -253,12 +299,29 @@ export default function CycloneMap({
   }, [forecastTrack, latestTrackPoint, track, webglSupported]);
 
   useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !map.isStyleLoaded()) return;
+    try {
+      const spec = BASEMAP_STYLES[basemap] ?? BASEMAP_STYLES.satellite;
+      const source = map.getSource("basemap") as
+        | { setTiles?: (tiles: string[]) => void }
+        | undefined;
+      if (source?.setTiles) {
+        source.setTiles(spec.tiles);
+        map.triggerRepaint();
+      }
+    } catch {
+      /* ignore tile-swap errors */
+    }
+  }, [basemap]);
+
+  useEffect(() => {
     if (!mapRef.current || !mapRef.current.isStyleLoaded()) {
       return;
     }
 
-    updateMapSources(mapRef.current, track, forecastTrack, storms);
-  }, [forecastTrack, storms, track]);
+    updateMapSources(mapRef.current, track, forecastTrack, cone, storms);
+  }, [cone, forecastTrack, storms, track]);
 
   useEffect(() => {
     if (!mapRef.current || !mapRef.current.isStyleLoaded() || !track.length) {
@@ -306,8 +369,10 @@ export default function CycloneMap({
         <LeafletFallbackMap
           track={track}
           forecastTrack={forecastTrack}
+          cone={cone}
           storms={storms}
           onSelectStorm={onSelectStorm}
+          basemap={basemap}
         />
       )}
 
@@ -460,6 +525,7 @@ function updateMapSources(
   map: MapLibreMap,
   track: TrackPoint[],
   forecastTrack: TrackPoint[],
+  cone: ConeCircle[] = [],
   storms: Storm[] = [],
 ) {
   const trackSource = map.getSource("track") as GeoJSONSource | undefined;
@@ -467,12 +533,14 @@ function updateMapSources(
   const latestSource = map.getSource("latest") as GeoJSONSource | undefined;
   const stormsSource = map.getSource("storms") as GeoJSONSource | undefined;
   const extentsSource = map.getSource("storm-extents") as GeoJSONSource | undefined;
+  const coneSource = map.getSource("cone") as GeoJSONSource | undefined;
 
   trackSource?.setData(toLineFeatureCollection(track));
   forecastSource?.setData(toLineFeatureCollection(forecastTrack));
   latestSource?.setData(toPointFeatureCollection(track[track.length - 1] ?? null));
   stormsSource?.setData(toStormsFeatureCollection(storms));
   extentsSource?.setData(toExtentFeatureCollection(storms));
+  coneSource?.setData(toConeFeatureCollection(cone));
 }
 
 function emptyFeatureCollection(): GeoJSON.FeatureCollection {
@@ -567,6 +635,19 @@ function toExtentFeatureCollection(storms: Storm[]): GeoJSON.FeatureCollection {
   };
 }
 
+function toConeFeatureCollection(cone: ConeCircle[]): GeoJSON.FeatureCollection {
+  return {
+    type: "FeatureCollection",
+    features: cone.map((c) => ({
+      type: "Feature" as const,
+      geometry: circlePolygon(c.lon, c.lat, c.radiusKm),
+      properties: {
+        timestamp: c.timestamp,
+      },
+    })),
+  };
+}
+
 function stormExtentKm(storm: Storm): number {
   const cat = (storm.category ?? windToCategory(storm.wind_kt ?? storm.maxWind ?? 0)).toUpperCase();
   const extentKm: Record<string, number> = {
@@ -613,16 +694,70 @@ function circlePolygon(
   };
 }
 
-function buildStyle(): StyleSpecification {
+export type BasemapKind = "satellite" | "gibs" | "streets" | "dark";
+
+/**
+ * YYYY-MM-DD for the NASA GIBS time dimension (MODIS true-colour layers).
+ *
+ * GIBS publishes MODIS daily imagery with ~1 day of lag, so requesting
+ * "today" returns 404/400 until the granule is online. Using UTC
+ * "yesterday" is the most recent date that is reliably available.
+ */
+function gibsDate(): string {
+  const d = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  return d.toISOString().slice(0, 10);
+}
+
+/**
+ * NASA GIBS WMTS — free, no API key. TileMatrixSet must be the
+ * `GoogleMapsCompatible_Level{N}` sets (Level6-13) — the bare
+ * `GoogleMapsCompatible` value does NOT exist for these layers.
+ */
+function gibsUrl(layer: string, matrix: string): string {
+  return `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/${layer}/default/${gibsDate()}/${matrix}/{z}/{y}/{x}.jpg`;
+}
+
+export const BASEMAP_STYLES: Record<BasemapKind, { label: string; tiles: string[] }> = {
+  // High-res, always-on global satellite imagery (free, no API key).
+  satellite: {
+    label: "🛰 Esri Satellite",
+    tiles: [
+      "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+    ],
+  },
+  // NASA GIBS daily global true-colour satellite imagery (free, no API key).
+  gibs: {
+    label: "🌍 NASA MODIS",
+    tiles: [
+      gibsUrl("MODIS_Aqua_CorrectedReflectance_TrueColor", "GoogleMapsCompatible_Level9"),
+      gibsUrl("MODIS_Terra_CorrectedReflectance_TrueColor", "GoogleMapsCompatible_Level9"),
+    ],
+  },
+  streets: {
+    label: "Streets",
+    tiles: [
+      "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+    ],
+  },
+  dark: {
+    label: "🌑 Dark Basemap",
+    tiles: [
+      "https://services.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}",
+      "https://services.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}",
+    ],
+  },
+};
+
+function buildStyle(kind: BasemapKind = "satellite"): StyleSpecification {
+  const spec = BASEMAP_STYLES[kind] ?? BASEMAP_STYLES.satellite;
   return {
     version: 8,
     sources: {
       basemap: {
         type: "raster",
-        tiles: ["https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}"],
+        tiles: spec.tiles,
         tileSize: 256,
-        attribution:
-          '&copy; Google Maps &copy; TerraMetrics, Map data &copy; Google',
+        attribution: "NASA GIBS / MODIS &copy; Esri &copy; OpenStreetMap &copy; CARTO",
         maxzoom: 20,
       },
     },

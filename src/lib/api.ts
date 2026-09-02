@@ -1,7 +1,7 @@
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
 
-export async function fetchJson<T>(path: string): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`);
+export async function fetchJson<T>(path: string, signal?: AbortSignal): Promise<T> {
+  const res = await fetch(`${API_BASE}${path}`, { signal });
   if (!res.ok) throw new Error(`API error ${res.status}: ${await res.text()}`);
   return res.json();
 }
@@ -16,6 +16,14 @@ export async function fetchStorm(stormId: string) {
 
 export async function fetchStormTrack(stormId: string) {
   return fetchJson<import("./types").TrackPoint[]>(`/api/storms/${stormId}/track`);
+}
+
+export async function fetchLiveMonitoring(opts?: { stormId?: string; signal?: AbortSignal }) {
+  const qs = opts?.stormId ? `?storm=${encodeURIComponent(opts.stormId)}` : "";
+  return fetchJson<import("./live/types").LiveMonitoringData>(
+    `/api/live${qs}`,
+    opts?.signal,
+  );
 }
 
 export async function fetchStormObservations(stormId: string) {

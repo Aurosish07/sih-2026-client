@@ -6,27 +6,40 @@ import "leaflet/dist/leaflet.css";
 import type { Storm, TrackPoint } from "@/lib/types";
 import { formatCoord, formatWind } from "@/lib/formatters";
 import { getCategoryColor, windToCategory } from "@/lib/types";
+import type { ConeCircle } from "./CycloneMap";
+import type { BasemapKind } from "./CycloneMap";
+import { BASEMAP_STYLES } from "./CycloneMap";
 
 interface LeafletFallbackMapProps {
   track: TrackPoint[];
   forecastTrack?: TrackPoint[];
+  cone?: ConeCircle[];
   storms?: Storm[];
   onSelectStorm?: (stormId: string) => void;
+  basemap?: BasemapKind;
 }
 
 export default function LeafletFallbackMap({
   track,
   forecastTrack = [],
+  cone = [],
   storms = [],
   onSelectStorm,
+  basemap = "satellite",
 }: LeafletFallbackMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);
+  const tileLayerRef = useRef<L.TileLayer | null>(null);
+  const basemapRef = useRef<BasemapKind>(basemap);
+  useEffect(() => {
+    basemapRef.current = basemap;
+  }, [basemap]);
   const trackLayerRef = useRef<L.Polyline | null>(null);
   const trackDotsRef = useRef<L.LayerGroup | null>(null);
   const forecastLayerRef = useRef<L.Polyline | null>(null);
   const forecastDotsRef = useRef<L.LayerGroup | null>(null);
   const stormsLayerRef = useRef<L.LayerGroup | null>(null);
+  const coneLayerRef = useRef<L.LayerGroup | null>(null);
   const onSelectRef = useRef<((id: string) => void) | undefined>(undefined);
   useEffect(() => {
     onSelectRef.current = onSelectStorm;
@@ -40,10 +53,13 @@ export default function LeafletFallbackMap({
       zoom: 4,
     });
 
-    L.tileLayer("https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}", {
-      maxZoom: 20,
-      attribution: "Map data &copy; Google",
-    }).addTo(map);
+    tileLayerRef.current = L.tileLayer(
+      BASEMAP_STYLES[basemapRef.current]?.tiles[0] ?? BASEMAP_STYLES.satellite.tiles[0],
+      {
+        maxZoom: 20,
+        attribution: "&copy; NASA GIBS &copy; Esri &copy; OpenStreetMap &copy; CARTO",
+      },
+    ).addTo(map);
 
     mapRef.current = map;
 
@@ -54,6 +70,19 @@ export default function LeafletFallbackMap({
       }
     };
   }, []);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    const url = BASEMAP_STYLES[basemap]?.tiles[0] ?? BASEMAP_STYLES.satellite.tiles[0];
+    const existing = tileLayerRef.current;
+    const layer = L.tileLayer(url, {
+      maxZoom: 20,
+      attribution: "&copy; NASA GIBS &copy; Esri &copy; OpenStreetMap &copy; CARTO",
+    }).addTo(map);
+    if (existing) existing.remove();
+    tileLayerRef.current = layer;
+  }, [basemap]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -178,6 +207,32 @@ export default function LeafletFallbackMap({
       stormsLayerRef.current = null;
     };
   }, [storms]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    if (coneLayerRef.current) coneLayerRef.current.remove();
+
+    const layer = L.layerGroup();
+    cone.forEach((c) => {
+      const radiusMeters = c.radiusKm * 1000;
+      L.circle([c.lat, c.lon], {
+        radius: radiusMeters,
+        color: "#0ea5e9",
+        weight: 1.5,
+        dashArray: "4 6",
+        fillColor: "#38bdf8",
+        fillOpacity: 0.16,
+      }).addTo(layer);
+    });
+    coneLayerRef.current = layer.addTo(map);
+
+    return () => {
+      if (coneLayerRef.current) coneLayerRef.current.remove();
+      coneLayerRef.current = null;
+    };
+  }, [cone]);
 
   return <div ref={containerRef} className="absolute inset-0 z-0" />;
 }
