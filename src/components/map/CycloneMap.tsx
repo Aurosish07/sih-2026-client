@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createRoot } from "react-dom/client";
 import {
   Map as MapLibreMap,
+  Marker,
   LngLatBounds,
   type StyleSpecification,
   type GeoJSONSource,
@@ -18,6 +20,7 @@ import {
 } from "@/lib/formatters";
 import { getCategoryColor, windToCategory } from "@/lib/types";
 import LeafletFallbackMap from "./LeafletFallbackMap";
+import StormSVGOverlay from "./StormSVGOverlay";
 
 export interface ConeCircle {
   timestamp: string;
@@ -51,6 +54,12 @@ export default function CycloneMap({
 }: CycloneMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
+  const stormOverlayMarkerRef = useRef<Marker | null>(null);
+  const stormOverlayRootRef = useRef<ReturnType<typeof createRoot> | null>(null);
+  const stormRef = useRef<Storm | null>(storm);
+  useEffect(() => {
+    stormRef.current = storm;
+  }, [storm]);
   const basemapRef = useRef<BasemapKind>(basemap);
   useEffect(() => {
     basemapRef.current = basemap;
@@ -93,6 +102,189 @@ export default function CycloneMap({
     };
   }, [storm]);
 
+  function syncStormOverlay(map: MapLibreMap | null, stormOverride?: Storm | null) {
+    const s = stormOverride !== undefined ? stormOverride : stormRef.current;
+    if (!map || !s) return;
+    applyTrackStyle(map, s);
+    const size = overlaySizeFor(map, s);
+    if (!stormOverlayMarkerRef.current) {
+      const el = document.createElement("div");
+      el.style.cssText =
+        "position:absolute;top:0;left:0;transform:translate(-50%,-50%);pointer-events:none;z-index:5;";
+      const marker = new Marker({ element: el })
+        .setLngLat([s.lon, s.lat])
+        .addTo(map);
+      stormOverlayMarkerRef.current = marker;
+      const root = createRoot(el);
+      stormOverlayRootRef.current = root;
+      root.render(<StormSVGOverlay storm={s} size={size} />);
+    } else {
+      stormOverlayMarkerRef.current.setLngLat([s.lon, s.lat]);
+      stormOverlayRootRef.current?.render(<StormSVGOverlay storm={s} size={size} />);
+    }
+  }
+
+  function ensureMapLayers(map: MapLibreMap) {
+    if (map.getSource("track")) return;
+
+    map.addSource("track", {
+      type: "geojson",
+      data: emptyFeatureCollection(),
+    });
+    map.addSource("forecast", {
+      type: "geojson",
+      data: emptyFeatureCollection(),
+    });
+    map.addSource("latest", {
+      type: "geojson",
+      data: emptyFeatureCollection(),
+    });
+
+    map.addLayer({
+      id: "track-line",
+      type: "line",
+      source: "track",
+      paint: {
+        "line-color": "#ea580c",
+        "line-width": 4,
+        "line-opacity": 0.9,
+      },
+    });
+
+    map.addLayer({
+      id: "forecast-line",
+      type: "line",
+      source: "forecast",
+      paint: {
+        "line-color": "#0284c7",
+        "line-width": 3,
+        "line-dasharray": [2, 2],
+        "line-opacity": 0.9,
+      },
+    });
+
+    map.addLayer({
+      id: "track-points",
+      type: "circle",
+      source: "track",
+      paint: {
+        "circle-radius": 5,
+        "circle-color": "#ea580c",
+        "circle-stroke-color": "#ffffff",
+        "circle-stroke-width": 1.5,
+      },
+    });
+
+    map.addLayer({
+      id: "latest-point",
+      type: "circle",
+      source: "latest",
+      paint: {
+        "circle-radius": 12,
+        "circle-color": "#ffffff",
+        "circle-opacity": 0.35,
+        "circle-stroke-color": "#ea580c",
+        "circle-stroke-width": 2.5,
+      },
+    });
+
+    map.addLayer({
+      id: "latest-point-inner",
+      type: "circle",
+      source: "latest",
+      paint: {
+        "circle-radius": 5,
+        "circle-color": "#ea580c",
+        "circle-stroke-color": "#ffffff",
+        "circle-stroke-width": 2,
+      },
+    });
+
+    map.addSource("storm-extents", {
+      type: "geojson",
+      data: emptyFeatureCollection(),
+    });
+
+    map.addLayer({
+      id: "storm-extents",
+      type: "fill",
+      source: "storm-extents",
+      paint: {
+        "fill-color": ["get", "color"],
+        "fill-opacity": 0.22,
+      },
+    });
+
+    map.addLayer({
+      id: "storm-extent-lines",
+      type: "line",
+      source: "storm-extents",
+      paint: {
+        "line-color": ["get", "color"],
+        "line-width": 1.5,
+        "line-dasharray": [1, 1],
+        "line-opacity": 0.9,
+      },
+    });
+
+    map.addSource("cone", {
+      type: "geojson",
+      data: emptyFeatureCollection(),
+    });
+
+    map.addLayer({
+      id: "cone-fill",
+      type: "fill",
+      source: "cone",
+      paint: {
+        "fill-color": "#38bdf8",
+        "fill-opacity": 0.16,
+      },
+    });
+
+    map.addLayer({
+      id: "cone-line",
+      type: "line",
+      source: "cone",
+      paint: {
+        "line-color": "#0ea5e9",
+        "line-width": 1.5,
+        "line-dasharray": [2, 2],
+        "line-opacity": 0.8,
+      },
+    });
+
+    map.addSource("storms", {
+      type: "geojson",
+      data: emptyFeatureCollection(),
+    });
+
+    map.addLayer({
+      id: "storms",
+      type: "circle",
+      source: "storms",
+      paint: {
+        "circle-radius": [
+          "interpolate",
+          ["linear"],
+          ["get", "wind_kt"],
+          0,
+          9,
+          64,
+          12,
+          120,
+          17,
+        ],
+        "circle-color": ["get", "color"],
+        "circle-stroke-color": "#ffffff",
+        "circle-stroke-width": 2,
+      },
+    });
+
+    updateMapSources(map, track, forecastTrack, coneRef.current, stormsRef.current);
+    syncStormOverlay(map);
+  }
+
   useEffect(() => {
     if (webglSupported !== true) return;
     if (!containerRef.current || mapRef.current) return;
@@ -105,163 +297,11 @@ export default function CycloneMap({
         center: latestTrackPoint ? [latestTrackPoint.lon, latestTrackPoint.lat] : [80, 15],
         zoom: latestTrackPoint ? 4.8 : 3.7,
         attributionControl: false,
-      cooperativeGestures: true,
-    });
+        cooperativeGestures: true,
+      });
 
     map.on("load", () => {
-      map.addSource("track", {
-        type: "geojson",
-        data: emptyFeatureCollection(),
-      });
-      map.addSource("forecast", {
-        type: "geojson",
-        data: emptyFeatureCollection(),
-      });
-      map.addSource("latest", {
-        type: "geojson",
-        data: emptyFeatureCollection(),
-      });
-
-      map.addLayer({
-        id: "track-line",
-        type: "line",
-        source: "track",
-        paint: {
-          "line-color": "#ea580c",
-          "line-width": 4,
-          "line-opacity": 0.9,
-        },
-      });
-
-      map.addLayer({
-        id: "forecast-line",
-        type: "line",
-        source: "forecast",
-        paint: {
-          "line-color": "#0284c7",
-          "line-width": 3,
-          "line-dasharray": [2, 2],
-          "line-opacity": 0.9,
-        },
-      });
-
-      map.addLayer({
-        id: "track-points",
-        type: "circle",
-        source: "track",
-        paint: {
-          "circle-radius": 5,
-          "circle-color": "#ea580c",
-          "circle-stroke-color": "#ffffff",
-          "circle-stroke-width": 1.5,
-        },
-      });
-
-      map.addLayer({
-        id: "latest-point",
-        type: "circle",
-        source: "latest",
-        paint: {
-          "circle-radius": 12,
-          "circle-color": "#ffffff",
-          "circle-opacity": 0.35,
-          "circle-stroke-color": "#ea580c",
-          "circle-stroke-width": 2.5,
-        },
-      });
-
-      map.addLayer({
-        id: "latest-point-inner",
-        type: "circle",
-        source: "latest",
-        paint: {
-          "circle-radius": 5,
-          "circle-color": "#ea580c",
-          "circle-stroke-color": "#ffffff",
-          "circle-stroke-width": 2,
-        },
-      });
-
-      map.addSource("storm-extents", {
-        type: "geojson",
-        data: emptyFeatureCollection(),
-      });
-
-      map.addLayer({
-        id: "storm-extents",
-        type: "fill",
-        source: "storm-extents",
-        paint: {
-          "fill-color": ["get", "color"],
-          "fill-opacity": 0.22,
-        },
-      });
-
-      map.addLayer({
-        id: "storm-extent-lines",
-        type: "line",
-        source: "storm-extents",
-        paint: {
-          "line-color": ["get", "color"],
-          "line-width": 1.5,
-          "line-dasharray": [1, 1],
-          "line-opacity": 0.9,
-        },
-      });
-
-      map.addSource("cone", {
-        type: "geojson",
-        data: emptyFeatureCollection(),
-      });
-
-      map.addLayer({
-        id: "cone-fill",
-        type: "fill",
-        source: "cone",
-        paint: {
-          "fill-color": "#38bdf8",
-          "fill-opacity": 0.16,
-        },
-      });
-
-      map.addLayer({
-        id: "cone-line",
-        type: "line",
-        source: "cone",
-        paint: {
-          "line-color": "#0ea5e9",
-          "line-width": 1.5,
-          "line-dasharray": [2, 2],
-          "line-opacity": 0.8,
-        },
-      });
-
-      map.addSource("storms", {
-        type: "geojson",
-        data: emptyFeatureCollection(),
-      });
-
-      map.addLayer({
-        id: "storms",
-        type: "circle",
-        source: "storms",
-        paint: {
-          "circle-radius": [
-            "interpolate",
-            ["linear"],
-            ["get", "wind_kt"],
-            0,
-            9,
-            64,
-            12,
-            120,
-            17,
-          ],
-          "circle-color": ["get", "color"],
-          "circle-stroke-color": "#ffffff",
-          "circle-stroke-width": 2,
-        },
-      });
+      ensureMapLayers(map);
 
       map.on("click", "storms", (e) => {
         const features = map.queryRenderedFeatures(e.point, {
@@ -277,8 +317,6 @@ export default function CycloneMap({
       map.on("mouseleave", "storms", () => {
         map.getCanvas().style.cursor = "";
       });
-
-      updateMapSources(map, track, forecastTrack, coneRef.current, stormsRef.current);
     });
 
     mapRef.current = map;
@@ -296,24 +334,70 @@ export default function CycloneMap({
       }
       mapRef.current = null;
     };
-  }, [forecastTrack, latestTrackPoint, track, webglSupported]);
+  }, [webglSupported]);
 
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !map.isStyleLoaded()) return;
+
     try {
+      const source = map.getSource("basemap") as { setTiles?: (tiles: string[]) => void } | undefined;
       const spec = BASEMAP_STYLES[basemap] ?? BASEMAP_STYLES.satellite;
-      const source = map.getSource("basemap") as
-        | { setTiles?: (tiles: string[]) => void }
-        | undefined;
-      if (source?.setTiles) {
+
+      if (source && typeof source.setTiles === "function") {
         source.setTiles(spec.tiles);
         map.triggerRepaint();
+        return;
       }
+
+      map.setStyle(buildStyle(basemap));
+      map.once("style.load", () => {
+        ensureMapLayers(map);
+        updateMapSources(map, track, forecastTrack, cone, storms);
+        syncStormOverlay(map);
+      });
     } catch {
-      /* ignore tile-swap errors */
+      /* ignore basemap-switch errors */
     }
-  }, [basemap]);
+  }, [basemap, cone, forecastTrack, storms, track]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    const resize = () => map.resize();
+    resize();
+
+    const observer = new ResizeObserver(() => resize());
+    if (containerRef.current) observer.observe(containerRef.current);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [webglSupported]);
+
+  useEffect(() => {
+    syncStormOverlay(mapRef.current);
+  }, [storm, latestTrackPoint]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    const onMove = () => syncStormOverlay(map);
+    map.on("move", onMove);
+    return () => {
+      map.off("move", onMove);
+    };
+  }, [webglSupported]);
+
+  useEffect(() => {
+    return () => {
+      stormOverlayRootRef.current?.render(null);
+      stormOverlayMarkerRef.current?.remove();
+      stormOverlayMarkerRef.current = null;
+      stormOverlayRootRef.current = null;
+    };
+  }, []);
 
   useEffect(() => {
     if (!mapRef.current || !mapRef.current.isStyleLoaded()) {
@@ -363,7 +447,7 @@ export default function CycloneMap({
         className ?? ""
       }`}
     >
-      <div ref={containerRef} className="absolute inset-0" />
+      <div ref={containerRef} className="h-full w-full" />
 
       {webglSupported === false && (
         <LeafletFallbackMap
@@ -648,6 +732,20 @@ function toConeFeatureCollection(cone: ConeCircle[]): GeoJSON.FeatureCollection 
   };
 }
 
+function applyTrackStyle(map: MapLibreMap, storm: Storm | null) {
+  const layer = map.getLayer("track-line");
+  if (!layer) return;
+  const historical = storm?.status === "historical";
+  const width = historical ? 3 : 4;
+  const dash = historical ? [6, 6] : [1, 0];
+  try {
+    map.setPaintProperty("track-line", "line-width", width);
+    map.setPaintProperty("track-line", "line-dasharray", dash);
+  } catch {
+    /* ignore style update errors */
+  }
+}
+
 function stormExtentKm(storm: Storm): number {
   const cat = (storm.category ?? windToCategory(storm.wind_kt ?? storm.maxWind ?? 0)).toUpperCase();
   const extentKm: Record<string, number> = {
@@ -669,6 +767,18 @@ function stormExtentKm(storm: Storm): number {
     SUPER_CYCLONE: 680,
   };
   return extentKm[cat] ?? 260;
+}
+
+/**
+ * Convert a storm's geographic extent (km diameter) into overlay pixel size at
+ * the map's current zoom level (Web Mercator). Keeps the drawn storm matched to
+ * its real footprint on the ground, and scales with live wind data.
+ */
+function overlaySizeFor(map: MapLibreMap, storm: Storm): number {
+  const radiusKm = stormExtentKm(storm) / 2;
+  const metersPerPixel = (156543.03392 * Math.cos((storm.lat * Math.PI) / 180)) / Math.pow(2, map.getZoom());
+  const diameterPx = (radiusKm * 2 * 1000) / metersPerPixel;
+  return Math.min(Math.max(diameterPx, 90), 700);
 }
 
 function circlePolygon(
@@ -694,28 +804,7 @@ function circlePolygon(
   };
 }
 
-export type BasemapKind = "satellite" | "gibs" | "streets" | "dark";
-
-/**
- * YYYY-MM-DD for the NASA GIBS time dimension (MODIS true-colour layers).
- *
- * GIBS publishes MODIS daily imagery with ~1 day of lag, so requesting
- * "today" returns 404/400 until the granule is online. Using UTC
- * "yesterday" is the most recent date that is reliably available.
- */
-function gibsDate(): string {
-  const d = new Date(Date.now() - 24 * 60 * 60 * 1000);
-  return d.toISOString().slice(0, 10);
-}
-
-/**
- * NASA GIBS WMTS — free, no API key. TileMatrixSet must be the
- * `GoogleMapsCompatible_Level{N}` sets (Level6-13) — the bare
- * `GoogleMapsCompatible` value does NOT exist for these layers.
- */
-function gibsUrl(layer: string, matrix: string): string {
-  return `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/${layer}/default/${gibsDate()}/${matrix}/{z}/{y}/{x}.jpg`;
-}
+export type BasemapKind = "satellite" | "streets" | "dark";
 
 export const BASEMAP_STYLES: Record<BasemapKind, { label: string; tiles: string[] }> = {
   // High-res, always-on global satellite imagery (free, no API key).
@@ -723,14 +812,6 @@ export const BASEMAP_STYLES: Record<BasemapKind, { label: string; tiles: string[
     label: "🛰 Esri Satellite",
     tiles: [
       "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-    ],
-  },
-  // NASA GIBS daily global true-colour satellite imagery (free, no API key).
-  gibs: {
-    label: "🌍 NASA MODIS",
-    tiles: [
-      gibsUrl("MODIS_Aqua_CorrectedReflectance_TrueColor", "GoogleMapsCompatible_Level9"),
-      gibsUrl("MODIS_Terra_CorrectedReflectance_TrueColor", "GoogleMapsCompatible_Level9"),
     ],
   },
   streets: {

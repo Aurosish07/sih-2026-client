@@ -24,7 +24,6 @@ const SIDEBAR_ITEMS = [
 
 const LAYER_ITEMS: { id: BasemapKind; label: string; emoji: string }[] = [
   { id: "satellite", label: "Esri Satellite", emoji: "🛰" },
-  { id: "gibs", label: "MODIS (NASA)", emoji: "🌍" },
   { id: "streets", label: "Base Map", emoji: "🗺" },
   { id: "dark", label: "Dark Mode", emoji: "🌑" },
 ];

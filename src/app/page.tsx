@@ -5,8 +5,7 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import CycloneMapWrapper from "@/components/map/CycloneMapWrapper";
 import type { BasemapKind } from "@/components/map/CycloneMap";
-import ImageGrid from "@/components/satellite/ImageGrid";
-import { fetchSatelliteImages, fetchStorm } from "@/lib/api";
+import { fetchStorm } from "@/lib/api";
 import { categoryLabel, formatCoord, formatDateTime, formatPressure, formatWind, trendArrow, windToKmh } from "@/lib/formatters";
 import { getCategoryColor, type Storm, type TrackPoint, type Observation, windToCategory } from "@/lib/types";
 import { useCycloneStore } from "@/stores/cycloneStore";
@@ -22,7 +21,6 @@ const SIDEBAR_ITEMS = [
 
 const LAYER_ITEMS: { id: BasemapKind; label: string; color: string }[] = [
   { id: "satellite", label: "Esri Satellite", color: "#6366f1" },
-  { id: "gibs", label: "MODIS (NASA)", color: "#8b5cf6" },
   { id: "streets", label: "Streets", color: "#10b981" },
   { id: "dark", label: "Dark Basemap", color: "#06b6d4" },
 ] as const;
@@ -79,8 +77,6 @@ function HomeContent() {
   const [liveMode, setLiveMode] = useState(true);
   const [isPlaying, setIsPlaying] = useState(true);
   const [forecastTrack, setForecastTrack] = useState<TrackPoint[]>([]);
-  const [satelliteImages, setSatelliteImages] = useState<import("@/lib/types").SatelliteImage[]>([]);
-  const [satelliteLoading, setSatelliteLoading] = useState(false);
 
   useEffect(() => { setMounted(true); }, []);
 
@@ -103,7 +99,6 @@ function HomeContent() {
     fetchTrend(activeStorm.id);
     fetchPrediction(activeStorm.id);
     fetchStorm(activeStorm.id).then((d) => setForecastTrack(d.forecast_track ?? [])).catch(() => setForecastTrack([]));
-    fetchSatelliteImages(activeStorm.id).then((imgs) => { setSatelliteImages(imgs); setSatelliteLoading(false); }).catch(() => { setSatelliteImages([]); setSatelliteLoading(false); });
   }, [activeStorm, fetchObservations, fetchPrediction, fetchTrack, fetchTrend]);
 
   const timeline = useMemo(() => toTrackPoints(track, observations), [observations, track]);
@@ -316,18 +311,71 @@ function HomeContent() {
 
           {/* Right panel */}
           <aside className="hidden flex-col gap-3 lg:flex">
-            {/* Layer controls */}
-            <div className="rounded-2xl border p-3 shadow-sm" style={{ background: "#ffffff", borderColor: "#e4e8f0" }}>
-              <div className="text-[10px] font-semibold uppercase tracking-[0.3em]" style={{ color: "#8b95b0" }}>Map Layers</div>
-              <div className="mt-3 space-y-2">
+            {/* Storm systems list */}
+            <div className="flex max-h-[46vh] flex-col rounded-2xl border p-3 shadow-sm" style={{ background: "#ffffff", borderColor: "#e4e8f0" }}>
+              <div className="flex items-center justify-between px-1">
+                <div className="text-[10px] font-semibold uppercase tracking-[0.3em]" style={{ color: "#8b95b0" }}>Storm Systems</div>
+                <span className="text-[10px] font-semibold" style={{ color: "#6366f1" }}>{stormList.length}</span>
+              </div>
+              <div className="mt-2 flex-1 space-y-1.5 overflow-y-auto pr-1" style={{ maxHeight: "38vh" }}>
+                {stormList.length === 0 && (
+                  <div className="px-2 py-4 text-center text-xs text-slate-400">No systems yet</div>
+                )}
+                {stormList.map((s) => {
+                  const sel = activeStorm?.id === s.id;
+                  const scat = s.category ?? windToCategory(s.wind_kt ?? s.maxWind ?? 0);
+                  const scur = getCategoryColor(scat);
+                  const historical = s.status === "historical";
+                  return (
+                    <button
+                      key={s.id}
+                      type="button"
+                      onClick={() => setActiveStorm(s)}
+                      className="flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-left transition-all"
+                      style={sel
+                        ? { background: `${scur}14`, border: `1.5px solid ${scur}55` }
+                        : { background: "#f8f9ff", border: "1.5px solid #e8ecf5" }}
+                    >
+                      <span
+                        className="h-3.5 w-3.5 shrink-0 rounded-full border"
+                        style={{ background: scur, borderColor: sel ? scur : "#d0d7e8" }}
+                      />
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-semibold" style={{ color: "#1a2035" }}>
+                          {s.name}
+                        </span>
+                        <span className="block truncate text-[11px]" style={{ color: "#8b95b0" }}>
+                          {scat.replace(/_/g, " ")} · {Math.round(s.wind_kt ?? s.maxWind ?? 0)} kt
+                        </span>
+                      </span>
+                      <span
+                        className="shrink-0 rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider"
+                        style={historical
+                          ? { background: "#f4f6fb", color: "#94a3b8", border: "1px solid #e2e8f0" }
+                          : { background: "#ecfdf5", color: "#059669", border: "1px solid #a7f3d0" }}
+                      >
+                        {historical ? "Archive" : "Live"}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Compact basemap toggle */}
+              <div className="mt-2 flex gap-1.5 border-t pt-2" style={{ borderColor: "#e4e8f0" }}>
                 {LAYER_ITEMS.map((layer) => {
                   const sel = activeLayer === layer.id;
                   return (
-                    <button key={layer.id} type="button" onClick={() => setActiveLayer(layer.id)}
-                      className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-sm font-medium transition-all"
-                      style={sel ? { background: `${layer.color}12`, color: layer.color, border: `1.5px solid ${layer.color}40` } : { background: "#f4f6fb", color: "#5a6380", border: "1.5px solid #e4e8f0" }}>
-                      <span>{layer.label}</span>
-                      <span className="h-5 w-5 rounded-full border-2" style={{ background: sel ? layer.color : "#e4e8f0", borderColor: sel ? layer.color : "#d0d7e8" }} />
+                    <button
+                      key={layer.id}
+                      type="button"
+                      onClick={() => setActiveLayer(layer.id)}
+                      className="flex-1 rounded-lg px-2 py-1.5 text-[11px] font-semibold transition-all"
+                      style={sel
+                        ? { background: `${layer.color}18`, color: layer.color, border: `1.5px solid ${layer.color}50` }
+                        : { background: "#f4f6fb", color: "#8b95b0", border: "1.5px solid #e4e8f0" }}
+                    >
+                      {layer.label.split(" ")[0]}
                     </button>
                   );
                 })}
@@ -348,29 +396,6 @@ function HomeContent() {
                     <div className="mt-1 text-sm font-medium" style={{ color: "#1a2035" }}>{r.val}</div>
                   </div>
                 ))}
-              </div>
-            </div>
-
-            {/* Real footage */}
-            <div className="rounded-2xl border p-4 shadow-sm" style={{ background: "#ffffff", borderColor: "#e4e8f0" }}>
-              <div className="flex items-center justify-between">
-                <div className="text-[10px] font-semibold uppercase tracking-[0.3em]" style={{ color: "#8b95b0" }}>Real Footage</div>
-                <span className="flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.2em]"
-                  style={liveMode ? { background: "#ecfdf5", borderColor: "#6ee7b7", color: "#059669" } : { background: "#f4f6fb", borderColor: "#e4e8f0", color: "#8b95b0" }}>
-                  <span className="h-1.5 w-1.5 rounded-full" style={{ background: liveMode ? "#10b981" : "#c4c9dc" }} />
-                  {liveMode ? "Live" : "Paused"}
-                </span>
-              </div>
-              <div className="mt-3 overflow-hidden rounded-xl border" style={{ borderColor: "#e4e8f0", background: "#081018" }}>
-                {satelliteLoading ? (
-                  <div className="flex h-40 items-center justify-center text-xs text-white/40">Loading satellite feed…</div>
-                ) : satelliteImages.length > 0 ? (
-                  <ImageGrid images={satelliteImages} isLoading={false} />
-                ) : (
-                  <div className="flex h-40 items-center justify-center px-4 text-center text-xs text-white/40">
-                    No live satellite footage yet. Toggle Live map to switch basemap.
-                  </div>
-                )}
               </div>
             </div>
 
