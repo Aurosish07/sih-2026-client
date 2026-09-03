@@ -10,20 +10,14 @@ import { categoryLabel, formatCoord, formatDateTime, formatPressure, formatWind,
 import { getCategoryColor, type Storm, type TrackPoint, type Observation, windToCategory } from "@/lib/types";
 import { useCycloneStore } from "@/stores/cycloneStore";
 import { usePredictionStore } from "@/stores/predictionStore";
+import MobileNav from "@/components/MobileNav";
 
 const SIDEBAR_ITEMS = [
-  { href: "/dashboard", label: "Dashboard", icon: "◫" },
   { href: "/monitor", label: "Monitor", icon: "◎" },
   { href: "/live", label: "Live", icon: "●" },
   { href: "/chat", label: "AI", icon: "◇" },
   { href: "/", label: "Storms", icon: "◌" },
 ];
-
-const LAYER_ITEMS: { id: BasemapKind; label: string; color: string }[] = [
-  { id: "satellite", label: "Esri Satellite", color: "#6366f1" },
-  { id: "streets", label: "Streets", color: "#10b981" },
-  { id: "dark", label: "Dark Basemap", color: "#06b6d4" },
-] as const;
 
 function toTrackPoints(track: TrackPoint[], observations: Observation[]): TrackPoint[] {
   if (track.length > 0) return track;
@@ -77,6 +71,9 @@ function HomeContent() {
   const [liveMode, setLiveMode] = useState(true);
   const [isPlaying, setIsPlaying] = useState(true);
   const [forecastTrack, setForecastTrack] = useState<TrackPoint[]>([]);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [mapCardOpen, setMapCardOpen] = useState(false);
+  const [timelineOpen, setTimelineOpen] = useState(false);
 
   useEffect(() => { setMounted(true); }, []);
 
@@ -130,37 +127,27 @@ function HomeContent() {
         <div className="absolute bottom-0 left-1/3 h-64 w-64 rounded-full opacity-10" style={{ background: "radial-gradient(circle, #10b981, transparent)" }} />
       </div>
 
-      <div className="relative flex min-h-screen flex-col gap-3 px-2 py-2">
+      <div className="relative flex min-h-screen flex-col gap-3 px-2 py-2 pb-28 lg:pb-2">
         {/* Header */}
-        <header className="rounded-2xl border px-4 py-3 shadow-lg" style={{ background: "#ffffff", borderColor: "#e4e8f0", boxShadow: "0 4px 20px rgba(99,102,241,0.1)" }}>
-          <div className="grid gap-3 lg:grid-cols-[auto_minmax(0,1fr)_auto] lg:items-center">
-            {/* Brand */}
-            <div className="flex items-center gap-3">
-              <div className="flex h-11 w-11 items-center justify-center rounded-xl text-white text-lg shadow-lg" style={{ background: "linear-gradient(135deg, #6366f1, #8b5cf6)" }}>
+        <header className="rounded-2xl border px-3 py-2.5 shadow-lg sm:px-4 sm:py-3" style={{ background: "#ffffff", borderColor: "#e4e8f0", boxShadow: "0 4px 20px rgba(99,102,241,0.1)" }}>
+          {/* Top row: brand + mobile toggle */}
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-white text-lg shadow-lg" style={{ background: "linear-gradient(135deg, #6366f1, #8b5cf6)" }}>
                 ◉
               </div>
-              <div>
-                <div className="text-[11px] font-semibold uppercase tracking-[0.3em]" style={{ color: "#6366f1" }}>
+              <div className="min-w-0">
+                <div className="truncate text-[11px] font-semibold uppercase tracking-[0.3em]" style={{ color: "#6366f1" }}>
                   StormSense AI
                 </div>
-                <div className="text-sm" style={{ color: "#5a6380" }}>
+                <div className="truncate text-xs sm:text-sm" style={{ color: "#5a6380" }}>
                   North Indian Ocean cyclone operations
                 </div>
               </div>
             </div>
 
-            {/* Metrics */}
-            <div className="grid gap-2 xl:grid-cols-5">
-              {topMetrics.map((m) => (
-                <div key={m.label} className="rounded-xl border px-3 py-2" style={{ background: "#f8f9ff", borderColor: "#e4e8f0", borderLeft: `3px solid ${m.color}` }}>
-                  <div className="text-[10px] font-medium uppercase tracking-[0.25em]" style={{ color: "#8b95b0" }}>{m.label}</div>
-                  <div className="mt-1 text-sm font-semibold" style={{ color: m.color }}>{m.value}</div>
-                </div>
-              ))}
-            </div>
-
-            {/* Controls */}
-            <div className="flex flex-wrap items-center gap-2 text-xs">
+            {/* Desktop: controls */}
+            <div className="hidden shrink-0 flex-wrap items-center gap-2 text-xs lg:flex">
               <label className="flex items-center gap-2 rounded-full border px-3 py-1.5 cursor-pointer" style={{ background: "#f4f6fb", borderColor: "#e4e8f0" }}>
                 <span className="text-[10px] font-medium uppercase tracking-[0.2em]" style={{ color: "#8b95b0" }}>Storm</span>
                 <select
@@ -192,7 +179,71 @@ function HomeContent() {
                 {predictionStatus}
               </div>
             </div>
+
+            {/* Mobile: dropdown toggle */}
+            <button
+              type="button"
+              onClick={() => setMobileOpen((v) => !v)}
+              aria-label="Toggle details"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border text-lg transition lg:hidden"
+              style={{ background: mobileOpen ? "#eef2ff" : "#f4f6fb", borderColor: mobileOpen ? "#c7d2fe" : "#e4e8f0", color: "#6366f1" }}
+            >
+              {mobileOpen ? "✕" : "☰"}
+            </button>
           </div>
+
+          {/* Desktop: metrics */}
+          <div className="hidden gap-2 pt-3 sm:grid sm:grid-cols-3 xl:grid-cols-5 lg:grid">
+            {topMetrics.map((m) => (
+              <div key={m.label} className="rounded-xl border px-3 py-2" style={{ background: "#f8f9ff", borderColor: "#e4e8f0", borderLeft: `3px solid ${m.color}` }}>
+                <div className="text-[10px] font-medium uppercase tracking-[0.25em]" style={{ color: "#8b95b0" }}>{m.label}</div>
+                <div className="mt-1 truncate text-sm font-semibold" style={{ color: m.color }}>{m.value}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Mobile: dropdown panel */}
+          {mobileOpen && (
+            <div className="mt-2.5 space-y-3 pt-2.5 lg:hidden" style={{ borderTop: "1px solid #e4e8f0" }}>
+              <div className="grid grid-cols-2 gap-2">
+                {topMetrics.map((m) => (
+                  <div key={m.label} className="rounded-xl border px-3 py-2" style={{ background: "#f8f9ff", borderColor: "#e4e8f0", borderLeft: `3px solid ${m.color}` }}>
+                    <div className="text-[10px] font-medium uppercase tracking-[0.25em]" style={{ color: "#8b95b0" }}>{m.label}</div>
+                    <div className="mt-1 truncate text-sm font-semibold" style={{ color: m.color }}>{m.value}</div>
+                  </div>
+                ))}
+              </div>
+              <div className="flex flex-wrap items-center gap-2 text-xs">
+                <label className="flex items-center gap-2 rounded-full border px-3 py-1.5 cursor-pointer" style={{ background: "#f4f6fb", borderColor: "#e4e8f0" }}>
+                  <span className="text-[10px] font-medium uppercase tracking-[0.2em]" style={{ color: "#8b95b0" }}>Storm</span>
+                  <select
+                    value={activeStorm?.id ?? ""}
+                    onChange={(e) => { const n = stormList.find((s) => s.id === e.target.value); if (n) setActiveStorm(n); }}
+                    className="max-w-[140px] cursor-pointer bg-transparent text-xs outline-none"
+                    style={{ color: "#1a2035" }}
+                  >
+                    <option value="" disabled>{stormList.length} active</option>
+                    {stormList.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                  </select>
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setLiveMode((v) => !v)}
+                  className="flex items-center gap-2 rounded-full border px-3 py-1.5 transition-all"
+                  style={liveMode ? { background: "#ecfdf5", borderColor: "#6ee7b7", color: "#059669" } : { background: "#f4f6fb", borderColor: "#e4e8f0", color: "#8b95b0" }}
+                >
+                  <span className="h-2 w-2 rounded-full pulse-live" style={{ background: liveMode ? "#10b981" : "#c4c9dc" }} />
+                  <span className="text-[10px] font-medium uppercase tracking-[0.2em]">Live {liveMode ? "ON" : "OFF"}</span>
+                </button>
+                <div className="rounded-full border px-3 py-1.5 text-[10px] font-medium" style={{ background: "#f4f6fb", borderColor: "#e4e8f0", color: "#5a6380" }}>
+                  {mounted ? utcNowLabel() : "—"}
+                </div>
+              </div>
+              <div className="rounded-xl border px-3 py-2 text-[10px] font-medium" style={{ background: "#fef9f0", borderColor: "#fed7aa", color: "#92400e" }}>
+                {predictionStatus}
+              </div>
+            </div>
+          )}
         </header>
 
         {/* Body */}
@@ -241,71 +292,117 @@ function HomeContent() {
             {/* Overlay gradient */}
             <div className="pointer-events-none absolute inset-0" style={{ background: "linear-gradient(180deg, rgba(2,6,23,0.05) 0%, rgba(2,6,23,0.25) 100%)" }} />
 
-            {/* Storm info card */}
-            <div className="absolute left-4 top-4 z-20 max-w-xs rounded-2xl border p-4 backdrop-blur-xl" style={{ background: "rgba(255,255,255,0.92)", borderColor: "#e4e8f0", boxShadow: "0 8px 32px rgba(99,102,241,0.15)" }}>
-              <div className="text-[10px] font-semibold uppercase tracking-[0.35em]" style={{ color: "#6366f1" }}>Live Cyclone View</div>
-              <div className="mt-2 flex items-center gap-3">
-                <h1 className="text-xl font-bold" style={{ color: "#1a2035" }}>{activeStorm?.name ?? "Storm feed"}</h1>
-                <span className="rounded-full border px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide" style={{ background: `${categoryColor}18`, borderColor: `${categoryColor}44`, color: categoryColor }}>
-                  {category}
-                </span>
-              </div>
-              <p className="mt-1 text-xs" style={{ color: "#5a6380" }}>
-                {activeStorm ? `${activeStorm.subbasin ?? activeStorm.basin ?? "North Indian Ocean"} · ${formatCoord(activeStorm.lat, activeStorm.lon)} · ${formatDateTime(activeStorm.timestamp)}` : "Waiting for the first storm record."}
-              </p>
-              <div className="mt-3 grid grid-cols-2 gap-2">
-                <MiniStat label="Wind" value={formatWind(stormWind)} />
-                <MiniStat label="Pressure" value={formatPressure(stormPressure)} />
-                <MiniStat label="Motion" value={stormHeading} />
-                <MiniStat label="Fix" value={latestPoint ? formatCoord(latestPoint.lat, latestPoint.lon) : "—"} />
-              </div>
-            </div>
-
-            {/* Bottom timeline bar */}
-            <div className="absolute inset-x-3 bottom-3 z-20 rounded-2xl border px-4 py-3 backdrop-blur-xl sm:inset-x-4" style={{ background: "rgba(255,255,255,0.90)", borderColor: "#e4e8f0", boxShadow: "0 8px 32px rgba(99,102,241,0.12)" }}>
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="flex flex-wrap items-center gap-2">
-                  <button type="button" onClick={() => setIsPlaying((v) => !v)}
-                    className="flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90"
-                    style={{ background: "linear-gradient(135deg, #6366f1, #8b5cf6)" }}>
-                    <span>{isPlaying ? "❚❚" : "▶"}</span>
-                    {isPlaying ? "Pause" : "Play"}
-                  </button>
-                  <button type="button" onClick={() => setActiveLayer("satellite")}
-                    className="rounded-full border px-4 py-2 text-sm font-medium transition hover:opacity-80"
-                    style={{ background: "#f4f6fb", borderColor: "#e4e8f0", color: "#5a6380" }}>
-                    1x
-                  </button>
-                  <div className="rounded-full border px-4 py-2 text-sm" style={{ background: "#f4f6fb", borderColor: "#e4e8f0", color: "#5a6380" }}>
-                    {latestPoint ? formatDateTime(latestPoint.timestamp) : (mounted ? utcNowLabel() : "—")}
+            {/* Storm info card (collapsible) */}
+            <div className="absolute left-2 top-2 z-20 sm:left-4 sm:top-4">
+              {!mapCardOpen ? (
+                <button
+                  type="button"
+                  onClick={() => setMapCardOpen(true)}
+                  className="flex items-center gap-2 rounded-full border px-3 py-2 backdrop-blur-xl transition hover:opacity-90"
+                  style={{ background: "rgba(255,255,255,0.92)", borderColor: "#e4e8f0", boxShadow: "0 4px 16px rgba(99,102,241,0.18)" }}
+                >
+                  <span className="h-2.5 w-2.5 rounded-full" style={{ background: categoryColor }} />
+                  <span className="max-w-[180px] truncate text-sm font-bold" style={{ color: "#1a2035" }}>{activeStorm?.name ?? "Storm feed"}</span>
+                  <span className="rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide" style={{ background: `${categoryColor}14`, borderColor: `${categoryColor}44`, color: categoryColor }}>
+                    {category}
+                  </span>
+                  <span className="text-xs text-slate-400">▾</span>
+                </button>
+              ) : (
+                <div className="max-w-xs rounded-2xl border p-4 backdrop-blur-xl" style={{ background: "rgba(255,255,255,0.94)", borderColor: "#e4e8f0", boxShadow: "0 8px 32px rgba(99,102,241,0.15)" }}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="text-[10px] font-semibold uppercase tracking-[0.35em]" style={{ color: "#6366f1" }}>Live Cyclone View</div>
+                    <button type="button" onClick={() => setMapCardOpen(false)} aria-label="Collapse" className="flex h-6 w-6 items-center justify-center rounded-full border text-sm bg-white" style={{ borderColor: "#e4e8f0", color: "#5a6380" }}>✕</button>
+                  </div>
+                  <div className="mt-2 flex items-center gap-3">
+                    <h1 className="text-xl font-bold" style={{ color: "#1a2035" }}>{activeStorm?.name ?? "Storm feed"}</h1>
+                    <span className="rounded-full border px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide" style={{ background: `${categoryColor}18`, borderColor: `${categoryColor}44`, color: categoryColor }}>
+                      {category}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-xs" style={{ color: "#5a6380" }}>
+                    {activeStorm ? `${activeStorm.subbasin ?? activeStorm.basin ?? "North Indian Ocean"} · ${formatCoord(activeStorm.lat, activeStorm.lon)} · ${formatDateTime(activeStorm.timestamp)}` : "Waiting for the first storm record."}
+                  </p>
+                  <div className="mt-3 grid grid-cols-2 gap-2">
+                    <MiniStat label="Wind" value={formatWind(stormWind)} />
+                    <MiniStat label="Pressure" value={formatPressure(stormPressure)} />
+                    <MiniStat label="Motion" value={stormHeading} />
+                    <MiniStat label="Fix" value={latestPoint ? formatCoord(latestPoint.lat, latestPoint.lon) : "—"} />
                   </div>
                 </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="rounded-full border px-4 py-2 text-sm font-semibold" style={{ background: "#fff1f2", borderColor: "#fecdd3", color: "#f43f5e" }}>NOW (06Z)</span>
-                  <span className="rounded-full border px-4 py-2 text-sm" style={{ background: "#f0fdf4", borderColor: "#bbf7d0", color: "#059669" }}>
-                    {formatWind(stormWind)} ({windToKmh(stormWind)} km/h)
+              )}
+            </div>
+
+            {/* Bottom timeline bar (collapsible) */}
+            <div className="absolute inset-x-2 bottom-2 z-20 sm:inset-x-4 sm:bottom-3">
+              {!timelineOpen ? (
+                <button
+                  type="button"
+                  onClick={() => setTimelineOpen(true)}
+                  className="flex w-full items-center justify-between gap-3 rounded-2xl border px-4 py-2.5 backdrop-blur-xl transition hover:opacity-90"
+                  style={{ background: "rgba(255,255,255,0.92)", borderColor: "#e4e8f0", boxShadow: "0 8px 32px rgba(99,102,241,0.15)" }}
+                >
+                  <span className="flex items-center gap-2 text-xs font-semibold" style={{ color: "#6366f1" }}>
+                    <span>{isPlaying ? "❚❚" : "▶"}</span>
+                    {isPlaying ? "Pause" : "Play"}
                   </span>
-                </div>
-              </div>
-
-              {/* Progress bar */}
-              <div className="mt-3 h-1.5 rounded-full" style={{ background: "#e4e8f0" }}>
-                <div className="h-1.5 rounded-full" style={{ background: "linear-gradient(90deg, #6366f1, #8b5cf6, #f59e0b)", width: `${Math.max(18, timelineSlices.length ? (timelineSlices.length / 9) * 100 : 18)}%` }} />
-              </div>
-
-              {/* Timeline dots */}
-              <div className="mt-3 flex items-center justify-between gap-3 overflow-x-auto pb-1">
-                {timelineSlices.map((point, index) => {
-                  const selected = index === timelineSlices.length - 1;
-                  const color = getCategoryColor(point.category ?? windToCategory(point.wind_kt));
-                  return (
-                    <div key={`${point.timestamp}-${index}`} className="flex min-w-[64px] flex-col items-center gap-1.5 text-[11px]" style={{ color: "#8b95b0" }}>
-                      <span className={`h-3 w-3 rounded-full border-2 border-white shadow-sm ${selected ? "ring-4 ring-indigo-300/40" : ""}`} style={{ background: color }} />
-                      <span>{timelineLabel(point.timestamp)}</span>
+                  <span className="flex items-center gap-2 text-xs font-medium" style={{ color: "#5a6380" }}>
+                    {latestPoint ? formatDateTime(latestPoint.timestamp) : (mounted ? utcNowLabel() : "—")}
+                  </span>
+                  <span className="flex items-center gap-2">
+                    <span className="rounded-full border px-2 py-0.5 text-[10px] font-bold" style={{ background: "#fff1f2", borderColor: "#fecdd3", color: "#f43f5e" }}>NOW</span>
+                    <span className="text-xs font-semibold" style={{ color: "#059669" }}>{formatWind(stormWind)}</span>
+                    <span className="text-xs text-slate-400">▴</span>
+                  </span>
+                </button>
+              ) : (
+                <div className="rounded-2xl border px-4 py-3 backdrop-blur-xl" style={{ background: "rgba(255,255,255,0.94)", borderColor: "#e4e8f0", boxShadow: "0 8px 32px rgba(99,102,241,0.15)" }}>
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button type="button" onClick={() => setIsPlaying((v) => !v)}
+                        className="flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90"
+                        style={{ background: "linear-gradient(135deg, #6366f1, #8b5cf6)" }}>
+                        <span>{isPlaying ? "❚❚" : "▶"}</span>
+                        {isPlaying ? "Pause" : "Play"}
+                      </button>
+                      <button type="button" onClick={() => setActiveLayer("satellite")}
+                        className="rounded-full border px-4 py-2 text-sm font-medium transition hover:opacity-80"
+                        style={{ background: "#f4f6fb", borderColor: "#e4e8f0", color: "#5a6380" }}>
+                        1x
+                      </button>
+                      <div className="rounded-full border px-4 py-2 text-sm" style={{ background: "#f4f6fb", borderColor: "#e4e8f0", color: "#5a6380" }}>
+                        {latestPoint ? formatDateTime(latestPoint.timestamp) : (mounted ? utcNowLabel() : "—")}
+                      </div>
                     </div>
-                  );
-                })}
-              </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="rounded-full border px-4 py-2 text-sm font-semibold" style={{ background: "#fff1f2", borderColor: "#fecdd3", color: "#f43f5e" }}>NOW (06Z)</span>
+                      <span className="rounded-full border px-4 py-2 text-sm" style={{ background: "#f0fdf4", borderColor: "#bbf7d0", color: "#059669" }}>
+                        {formatWind(stormWind)} ({windToKmh(stormWind)} km/h)
+                      </span>
+                      <button type="button" onClick={() => setTimelineOpen(false)} aria-label="Collapse" className="flex h-8 w-8 items-center justify-center rounded-full border bg-white text-sm" style={{ borderColor: "#e4e8f0", color: "#5a6380" }}>✕</button>
+                    </div>
+                  </div>
+
+                  {/* Progress bar */}
+                  <div className="mt-3 h-1.5 rounded-full" style={{ background: "#e4e8f0" }}>
+                    <div className="h-1.5 rounded-full" style={{ background: "linear-gradient(90deg, #6366f1, #8b5cf6, #f59e0b)", width: `${Math.max(18, timelineSlices.length ? (timelineSlices.length / 9) * 100 : 18)}%` }} />
+                  </div>
+
+                  {/* Timeline dots */}
+                  <div className="mt-3 flex items-center justify-between gap-3 overflow-x-auto pb-1">
+                    {timelineSlices.map((point, index) => {
+                      const selected = index === timelineSlices.length - 1;
+                      const color = getCategoryColor(point.category ?? windToCategory(point.wind_kt));
+                      return (
+                        <div key={`${point.timestamp}-${index}`} className="flex min-w-[64px] flex-col items-center gap-1.5 text-[11px]" style={{ color: "#8b95b0" }}>
+                          <span className={`h-3 w-3 rounded-full border-2 border-white shadow-sm ${selected ? "ring-4 ring-indigo-300/40" : ""}`} style={{ background: color }} />
+                          <span>{timelineLabel(point.timestamp)}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
           </section>
 
@@ -360,26 +457,6 @@ function HomeContent() {
                   );
                 })}
               </div>
-
-              {/* Compact basemap toggle */}
-              <div className="mt-2 flex gap-1.5 border-t pt-2" style={{ borderColor: "#e4e8f0" }}>
-                {LAYER_ITEMS.map((layer) => {
-                  const sel = activeLayer === layer.id;
-                  return (
-                    <button
-                      key={layer.id}
-                      type="button"
-                      onClick={() => setActiveLayer(layer.id)}
-                      className="flex-1 rounded-lg px-2 py-1.5 text-[11px] font-semibold transition-all"
-                      style={sel
-                        ? { background: `${layer.color}18`, color: layer.color, border: `1.5px solid ${layer.color}50` }
-                        : { background: "#f4f6fb", color: "#8b95b0", border: "1.5px solid #e4e8f0" }}
-                    >
-                      {layer.label.split(" ")[0]}
-                    </button>
-                  );
-                })}
-              </div>
             </div>
 
             {/* Situation */}
@@ -412,19 +489,7 @@ function HomeContent() {
           </aside>
         </div>
 
-        {/* Mobile nav */}
-        <div className="grid gap-2 lg:hidden">
-          <div className="grid grid-cols-2 gap-2">
-            {SIDEBAR_ITEMS.map((item) => (
-              <Link key={item.href} href={item.href} className="rounded-xl border px-4 py-3 text-sm font-medium transition" style={{ background: "#ffffff", borderColor: "#e4e8f0", color: "#5a6380" }}>
-                {item.icon} {item.label}
-              </Link>
-            ))}
-          </div>
-          <div className="rounded-xl border p-3 text-sm" style={{ background: "#ffffff", borderColor: "#e4e8f0", color: "#5a6380" }}>
-            {activeStorm ? `${activeStorm.name} is selected` : "No storm selected"}
-          </div>
-        </div>
+        <MobileNav items={SIDEBAR_ITEMS} />
       </div>
     </div>
   );

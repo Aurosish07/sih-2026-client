@@ -168,10 +168,17 @@ export default function CycloneMap({
       type: "circle",
       source: "track",
       paint: {
-        "circle-radius": 5,
-        "circle-color": "#ea580c",
+        "circle-radius": [
+          "interpolate",
+          ["linear"],
+          ["get", "wind_kt"],
+          0, 6,
+          64, 8,
+          120, 11,
+        ],
+        "circle-color": "#f59e0b",
         "circle-stroke-color": "#ffffff",
-        "circle-stroke-width": 1.5,
+        "circle-stroke-width": 2,
       },
     });
 
@@ -804,7 +811,7 @@ function circlePolygon(
   };
 }
 
-export type BasemapKind = "satellite" | "streets" | "dark";
+export type BasemapKind = "satellite" | "streets" | "light";
 
 export const BASEMAP_STYLES: Record<BasemapKind, { label: string; tiles: string[] }> = {
   // High-res, always-on global satellite imagery (free, no API key).
@@ -820,11 +827,15 @@ export const BASEMAP_STYLES: Record<BasemapKind, { label: string; tiles: string[
       "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
     ],
   },
-  dark: {
-    label: "🌑 Dark Basemap",
+  // Light, low-contrast basemap optimised to fit dense data overlays
+  // (storm tracks & historical archive) without visual clutter.
+  light: {
+    label: "📊 Light / Data",
     tiles: [
-      "https://services.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}",
-      "https://services.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}",
+      "https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png",
+      "https://b.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png",
+      "https://c.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png",
+      "https://d.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png",
     ],
   },
 };
@@ -838,7 +849,7 @@ function buildStyle(kind: BasemapKind = "satellite"): StyleSpecification {
         type: "raster",
         tiles: spec.tiles,
         tileSize: 256,
-        attribution: "NASA GIBS / MODIS &copy; Esri &copy; OpenStreetMap &copy; CARTO",
+        attribution: "NASA GIBS / MODIS &copy; Esri &copy; OpenStreetMap &copy; CARTO &copy; OpenStreetMap contributors",
         maxzoom: 20,
       },
     },

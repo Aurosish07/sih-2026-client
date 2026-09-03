@@ -124,12 +124,6 @@ export default function MonitorPage() {
             </Link>
           </div>
           <div className="flex items-center gap-4">
-            <Link
-              href="/dashboard"
-              className="text-sm text-slate-500 transition-colors hover:text-slate-900"
-            >
-              Dashboard
-            </Link>
             <Link href="/monitor" className="text-sm font-medium text-orange-600">
               Monitor
             </Link>
